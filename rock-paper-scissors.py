@@ -7,8 +7,6 @@ from collections import Counter
 import random
 from time import sleep
 import time 
-import socket
-import asyncio
 
 #draws hand framework over the hand in real time
 drawingModule = mediapipe.solutions.drawing_utils
@@ -30,15 +28,6 @@ comp_score = 0
 
 button = True
 
-HOST = "192.168.212.251"  # The server's hostname or IP address
-PORT = 65432  # The port used by the server
-
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.connect((HOST, PORT))
-    s.sendall(b"Hello, world")
-    data = s.recv(1024)
-
-print(f"Received {data!r}")
 
 ret, frame = cap.read()
 frame1 = cv2.resize(frame, (640, 480))
@@ -55,123 +44,109 @@ def findNameOfLandmark(frame1):
 
 counter = 0
 
-def cameraLoop():
-     # infinite loop that produces live feed on screen searching for hands
-        while True:
-            asyncio.run(listenLoop())
-            ret, frame = cap.read()
-            frame1 = cv2.resize(frame, (640, 480))
+# infinite loop that produces live feed on screen searching for hands
+while True:
 
+    ret, frame = cap.read()
+    frame1 = cv2.resize(frame, (640, 480))
+
+    list = []
+    # converts video to desired colours
+    results = hands.process(cv2.cvtColor(frame1, cv2.COLOR_BGR2RGB))
+
+
+    # if hand is on screen
+    if results.multi_hand_landmarks != None:
+        # deals with mutliple hands
+        for handLandmarks in results.multi_hand_landmarks:
             list = []
-            # converts video to desired colours
-            results = hands.process(cv2.cvtColor(frame1, cv2.COLOR_BGR2RGB))
+            drawingModule.draw_landmarks(image = frame1, landmark_list = handLandmarks, connections = handsModule.HAND_CONNECTIONS)
+            for id, pt in enumerate (handLandmarks.landmark):
+                x = int(pt.x * w)
+                y = int(pt.y * h)
+                list.append([id,x,y])
 
+    # displays camera feed
+    cv2.imshow('ROCK PAPER SCISSORS', frame1)
 
-            # if hand is on screen
-            if results.multi_hand_landmarks != None:
-                # deals with mutliple hands
-                for handLandmarks in results.multi_hand_landmarks:
-                    list = []
-                    drawingModule.draw_landmarks(image = frame1, landmark_list = handLandmarks, connections = handsModule.HAND_CONNECTIONS)
-                    for id, pt in enumerate (handLandmarks.landmark):
-                        x = int(pt.x * w)
-                        y = int(pt.y * h)
-                        list.append([id,x,y])
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('q'):
+        break
+    
+    a = list
+    b = findNameOfLandmark(frame1)
 
-            # displays camera feed
-            cv2.imshow('ROCK PAPER SCISSORS', frame1)
+    if len(b and a) != 0:
+        fingers = []
+        for id in range(0,4):
+            # checks for each finger in turn using hand landmark numbers
+            if tip[id] == (id*4)+8 and mid[id] == (id*4)+6:
+                # checks if fingertip is higher than middle joint
+                # "is finger up"
+                if (a[tip[id]][2:] < a[mid[id]][2:]):
+                    fingers.append('up')
+                else:
+                    fingers.append('down')
+
+        #print("fingers: ", fingers)
+        c = Counter(fingers)
+        up = c['up']
+        down = c['down']
         
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                break
 
-async def buttonPress():
+        comp = random.choice(['rock','paper','scissors'])
+
+        if (fingers[0] == 'up' and fingers[1] == 'up' and fingers[2] == 'down' and fingers[3] == 'down'):
+            print("\nSCISSORS\n")
+
+            if (comp == "scissors"):
+                print("COMPUTER PLAYED SCISSORS\nDRAW")
             
-        a = list
-        b = findNameOfLandmark(frame1)
-
-        if len(b and a) != 0:
-            fingers = []
-            for id in range(0,4):
-                # checks for each finger in turn using hand landmark numbers
-                if tip[id] == (id*4)+8 and mid[id] == (id*4)+6:
-                    # checks if fingertip is higher than middle joint
-                    # "is finger up"
-                    if (a[tip[id]][2:] < a[mid[id]][2:]):
-                        fingers.append('up')
-                    else:
-                        fingers.append('down')
-
-            print("fingers: ", fingers)
-            c = Counter(fingers)
-            up = c['up']
-            down = c['down']
+            elif (comp == "rock"):
             
-            data = await s.recv(1024)
-            print(f"Received {data!r}")
+                print("COMPUTER PLAYED ROCK\nYOU LOSE")
+                comp_score += 1
             
+            else:
+                print("COMPUTER PLAYED PAPER\nYOU WIN")
+                user_score += 1
 
-            comp = random.choice(['rock','paper','scissors'])
-
-            if (fingers[0] == 'up' and fingers[1] == 'up' and fingers[2] == 'down' and fingers[3] == 'down'):
-                print("\nSCISSORS\n")
-
-                if (comp == "scissors"):
-                    print("COMPUTER PLAYED SCISSORS\nDRAW")
-                
-                elif (comp == "rock"):
-                
-                    print("COMPUTER PLAYED ROCK\nYOU LOSE")
-                    comp_score += 1
-                
-                else:
-                    print("COMPUTER PLAYED PAPER\nYOU WIN")
-                    user_score += 1
-                
+            print("YOU vs COMP\n" + str(user_score) + "\t" + str(comp_score))
             
-            elif (fingers[0] == 'up' and fingers[1] == 'up' and fingers[2] == 'up' and fingers[3] == 'up'):
-                print("\nPAPER\n")
+        
+        elif (fingers[0] == 'up' and fingers[1] == 'up' and fingers[2] == 'up' and fingers[3] == 'up'):
+            print("\nPAPER\n")
 
-                if (comp == "scissors"):
-                    print("COMPUTER PLAYED SCISSORS\YOU LOSE")
-                    comp_score += 1
-                
-                elif (comp == "rock"):
-                    print("COMPUTER PLAYED ROCK\nYOU WIN")
-                    user_score += 1
-                
-                else:
-                    print("COMPUTER PLAYED PAPER\nDRAW")
-                
-            elif (fingers[0] == 'down' and fingers[1] == 'down' and fingers[2] == 'down' and fingers[3] == 'down'):
-
-                print("\nROCK")
-                if (comp == "scissors"):
-                    print("COMPUTER PLAYED SCISSORS\nYOU WIN")
-                    user_score += 1
-                
-                elif (comp == "rock"):
-                    print("COMPUTER PLAYED ROCK\nDRAW")
-                
-                else:
-                    print("COMPUTER PLAYED PAPER\nYOU LOSE")
-                    comp_score += 1
-                
-            scores = "YOU vs COMP\n",user_score,comp_score
-            s.sendall(scores)
-            #sleep(3)
-
+            if (comp == "scissors"):
+                print("COMPUTER PLAYED SCISSORS\nYOU LOSE")
+                comp_score += 1
             
-async def listenLoop():
-    while True:
-        data = s.recv(1024)
-        print("data: ",data)
-        if data == "Button pressed":
-            buttonPress()
+            elif (comp == "rock"):
+                print("COMPUTER PLAYED ROCK\nYOU WIN")
+                user_score += 1
+            
+            else:
+                print("COMPUTER PLAYED PAPER\nDRAW")
 
-cameraLoop()
+            print("YOU vs COMP\n" + str(user_score) + "\t" + str(comp_score))
+            
+        elif (fingers[0] == 'down' and fingers[1] == 'down' and fingers[2] == 'down' and fingers[3] == 'down'):
 
+            print("\nROCK")
+            if (comp == "scissors"):
+                print("COMPUTER PLAYED SCISSORS\nYOU WIN")
+                user_score += 1
+            
+            elif (comp == "rock"):
+                print("COMPUTER PLAYED ROCK\nDRAW")
+            
+            else:
+                print("COMPUTER PLAYED PAPER\nYOU LOSE")
+                comp_score += 1
+            
+            print("YOU vs COMP\n" + str(user_score) + "\t" + str(comp_score))
+        #sleep(3)
 
-s.close()
+           
 cap.release()
 cv2.destroyAllWindows()
